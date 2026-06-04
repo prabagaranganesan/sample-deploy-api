@@ -40,15 +40,10 @@ on:
         description: "Override repo name for mapping lookup (default: current GitHub repo name)"
         required: false
         type: string
-      guard_runner_repository:
-        description: "owner/repo with tools/guard-runner when not vendored here (e.g. your-org/proxy_buddy)"
+      guard_runner_url:
+        description: "Private URL for prebuilt guard-runner binary (.tar.gz or raw binary)"
         required: false
         type: string
-      guard_runner_ref:
-        description: "Git ref to fetch guard-runner from"
-        required: false
-        type: string
-        default: "main"
     secrets:
       PROXYHAWK_API_BASE_URL:
         required: false
@@ -60,7 +55,7 @@ on:
         required: false
       PROXYHAWK_MACHINE_ID:
         required: false
-      PROXYHAWK_GUARD_RUNNER_REPO:
+      PROXYHAWK_GUARD_RUNNER_URL:
         required: false
       PROXYHAWK_GUARD_RUNNER_TOKEN:
         required: false
@@ -85,6 +80,9 @@ on:
         description: "latest or mac_push"
         required: false
         default: "latest"
+      guard_runner_url:
+        description: "Private URL for prebuilt guard-runner binary (.tar.gz or raw binary)"
+        required: false
 
 permissions:
   id-token: write
@@ -118,6 +116,7 @@ jobs:
             echo "mapping_owner=${{ github.event.inputs.mapping_owner }}" >> "$GITHUB_OUTPUT"
             echo "mapping_repo=${{ github.event.inputs.mapping_repo }}" >> "$GITHUB_OUTPUT"
             echo "guard_base_url=${{ github.event.inputs.guard_base_url }}" >> "$GITHUB_OUTPUT"
+            echo "guard_runner_url=${{ github.event.inputs.guard_runner_url }}" >> "$GITHUB_OUTPUT"
           else
             echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
             echo "sha=${{ inputs.commit_sha || github.sha }}" >> "$GITHUB_OUTPUT"
@@ -127,6 +126,7 @@ jobs:
             echo "mapping_owner=${{ inputs.mapping_owner }}" >> "$GITHUB_OUTPUT"
             echo "mapping_repo=${{ inputs.mapping_repo }}" >> "$GITHUB_OUTPUT"
             echo "guard_base_url=${{ inputs.guard_base_url }}" >> "$GITHUB_OUTPUT"
+            echo "guard_runner_url=${{ inputs.guard_runner_url }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Resolve PR from commit SHA
@@ -286,34 +286,58 @@ jobs:
             -d "$payload" \
             "${PROXYHAWK_API_BASE_URL%/}/api/v1/integrations/github/pipeline/deployments" > deploy_http_code.txt
 
-      - name: Install Rust toolchain
+      - name: Resolve guard-runner binary
         if: steps.mapping.outputs.matched == 'true' && steps.ctx.outputs.run_mode == 'headless'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Ensure guard-runner source
-        if: steps.mapping.outputs.matched == 'true' && steps.ctx.outputs.run_mode == 'headless'
+        id: runner
         env:
-          RUNNER_REPO: ${{ inputs.guard_runner_repository || secrets.PROXYHAWK_GUARD_RUNNER_REPO }}
-          RUNNER_REF: ${{ inputs.guard_runner_ref || 'main' }}
-          RUNNER_TOKEN: ${{ secrets.PROXYHAWK_GUARD_RUNNER_TOKEN || github.token }}
+          RUNNER_URL: ${{ steps.ctx.outputs.guard_runner_url || secrets.PROXYHAWK_GUARD_RUNNER_URL || vars.PROXYHAWK_GUARD_RUNNER_URL }}
+          RUNNER_TOKEN: ${{ secrets.PROXYHAWK_GUARD_RUNNER_TOKEN }}
         run: |
-          if [ -f tools/guard-runner/Cargo.toml ]; then
-            echo "Using vendored tools/guard-runner"
+          if [ -x "$GITHUB_WORKSPACE/tools/guard-runner/proxyhawk-guard" ]; then
+            echo "Using vendored guard-runner binary."
+            echo "runner_path=$GITHUB_WORKSPACE/tools/guard-runner/proxyhawk-guard" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ -z "$RUNNER_REPO" ]; then
-            echo "Missing tools/guard-runner in this repository."
-            echo "Run: curl -fsSL https://proxyhawk.io/guard-ci/install.sh | bash"
-            echo "Then commit tools/guard-runner/ — or set workflow input guard_runner_repository."
+          if [ -z "$RUNNER_URL" ]; then
+            echo "Missing guard-runner binary."
+            echo "Set PROXYHAWK_GUARD_RUNNER_URL secret/variable to a private binary URL."
+            echo "Optionally set PROXYHAWK_GUARD_RUNNER_TOKEN for authenticated downloads."
             exit 1
           fi
-          echo "Fetching tools/guard-runner from ${RUNNER_REPO}@${RUNNER_REF}"
-          git clone --depth 1 --branch "$RUNNER_REF" --filter=blob:none --sparse \
-            "https://x-access-token:${RUNNER_TOKEN}@github.com/${RUNNER_REPO}.git" /tmp/guard-runner-src
-          cd /tmp/guard-runner-src
-          git sparse-checkout set tools/guard-runner
-          mkdir -p "$GITHUB_WORKSPACE/tools"
-          cp -r tools/guard-runner "$GITHUB_WORKSPACE/tools/guard-runner"
+
+          tmp_payload="$(mktemp)"
+          mkdir -p "$GITHUB_WORKSPACE/.proxyhawk/bin"
+          auth_args=()
+          if [ -n "$RUNNER_TOKEN" ]; then
+            auth_args=(-H "Authorization: Bearer ${RUNNER_TOKEN}")
+          fi
+          curl -fsSL "${auth_args[@]}" "$RUNNER_URL" -o "$tmp_payload"
+
+          runner_path="$GITHUB_WORKSPACE/.proxyhawk/bin/proxyhawk-guard"
+          if tar -tzf "$tmp_payload" >/dev/null 2>&1; then
+            tmp_extract="$(mktemp -d)"
+            tar -xzf "$tmp_payload" -C "$tmp_extract"
+            if [ -f "$tmp_extract/proxyhawk-guard" ]; then
+              install -m 0755 "$tmp_extract/proxyhawk-guard" "$runner_path"
+            elif [ -f "$tmp_extract/bin/proxyhawk-guard" ]; then
+              install -m 0755 "$tmp_extract/bin/proxyhawk-guard" "$runner_path"
+            else
+              found="$(find "$tmp_extract" -type f -name proxyhawk-guard | head -1 || true)"
+              if [ -z "$found" ]; then
+                echo "Downloaded tarball does not contain proxyhawk-guard binary."
+                exit 1
+              fi
+              install -m 0755 "$found" "$runner_path"
+            fi
+          else
+            install -m 0755 "$tmp_payload" "$runner_path"
+          fi
+
+          if [ ! -x "$runner_path" ]; then
+            echo "guard-runner binary is not executable after download."
+            exit 1
+          fi
+          echo "runner_path=$runner_path" >> "$GITHUB_OUTPUT"
 
       - name: Run Guard headless against deployed API
         if: steps.mapping.outputs.matched == 'true' && steps.ctx.outputs.run_mode == 'headless'
@@ -333,16 +357,19 @@ jobs:
           else
             echo "Deploy host override: $GUARD_BASE_URL (only matching-host endpoints are rewritten)."
           fi
-          cd tools/guard-runner
-          cargo build --release
+          runner="${{ steps.runner.outputs.runner_path }}"
+          if [ -z "$runner" ] || [ ! -x "$runner" ]; then
+            echo "guard-runner binary not found."
+            exit 1
+          fi
           set +e
           if [ -n "$GUARD_BASE_URL" ]; then
-            ./target/release/proxyhawk-guard \
+            "$runner" \
               --session-id "$PROXYHAWK_GUARD_SESSION_ID" \
               --base-url "$GUARD_BASE_URL" \
               --submit
           else
-            ./target/release/proxyhawk-guard \
+            "$runner" \
               --session-id "$PROXYHAWK_GUARD_SESSION_ID" \
               --submit
           fi
