@@ -61,7 +61,9 @@ git add .github/workflows/ tools/guard-runner/
 git commit -m "Add ProxyHawk Guard CI" && git push
 ```
 
-### 5. Wire `.github/workflows/ci.yml`
+### 5. Wire your pipeline workflow
+
+Job and file names are flexible — `needs:` must match your deploy job id.
 
 ```yaml
 permissions:
@@ -69,7 +71,10 @@ permissions:
   contents: read
   pull-requests: write
 
-  guard-checkpoint-staging:
+jobs:
+  # … existing test, deploy-staging jobs …
+
+  guard-staging:
     needs: deploy-staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     uses: ./.github/workflows/guard-post-backend-deploy.yml
