@@ -1,5 +1,8 @@
 name: Deploy and verify
 
+# Public copy: https://proxyhawk.io/guard-ci/workflows/deploy-wait.yml
+# Docs: https://proxyhawk.io/docs/guard-ci-onboarding.html
+
 on:
   workflow_call:
     inputs:
