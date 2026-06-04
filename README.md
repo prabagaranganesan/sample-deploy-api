@@ -1,11 +1,11 @@
 # sample-deploy-api
 
-Minimal Spring Boot API used to demo **two-phase ProxyHawk Guard onboarding**:
+Minimal Spring Boot API for **two-phase ProxyHawk Guard onboarding**.
 
-| Phase | What you have |
-|-------|----------------|
-| **Phase 1** (this repo) | Backend + CI with `test` → `deploy-staging` only |
-| **Phase 2** | Add ProxyHawk Guard checkpoint after deploy |
+| Phase | Pipeline |
+|-------|----------|
+| **Phase 1** | `test → deploy-staging` |
+| **Phase 2** | `test → deploy-staging → guard-checkpoint-staging` |
 
 ## API
 
@@ -14,50 +14,80 @@ Minimal Spring Boot API used to demo **two-phase ProxyHawk Guard onboarding**:
 | `GET /api/health` | Returns `gitSha` (deploy verify) |
 | `GET /api/v1/profile` | Sample endpoint to Guard in Phase 2 |
 
-## Phase 1 — Deploy pipeline (current)
+---
+
+## Phase 1 — Deploy (done)
 
 ```
-push to main → test → deploy-staging (Render deploy hook + SHA verify)
+push main → test → deploy-staging
 ```
 
-### GitHub Actions config
+GitHub → **Settings → Secrets and variables → Actions**
 
-Repo → **Settings → Secrets and variables → Actions**
+| Type | Name | Example |
+|------|------|---------|
+| **Variable** | `STAGING_DEPLOY_PLATFORM` | `render` |
+| **Variable** | `STAGING_API_URL` | `https://sample-deploy-api.onrender.com` |
+| **Secret** | `STAGING_DEPLOY_HOOK` | Render deploy hook |
 
-**Variables**
+**Note:** `STAGING_API_URL` must be a **Variable**, not a Secret.
 
-| Name | Example |
-|------|---------|
-| `STAGING_DEPLOY_PLATFORM` | `render` |
-| `STAGING_API_URL` | `https://sample-deploy-api.onrender.com` |
-
-**Secrets**
-
-| Name | Example |
-|------|---------|
-| `STAGING_DEPLOY_HOOK` | Render deploy hook URL |
-
-### Render
-
-1. Create web service from this repo (`render.yaml` included).
-2. **Auto-Deploy → Off** (GitHub Actions triggers deploys).
-3. Copy **Deploy Hook** → GitHub secret `STAGING_DEPLOY_HOOK`.
-
-Verify Phase 1: push to `main` → Actions green through `deploy-staging`.
+```bash
+curl -sS https://sample-deploy-api.onrender.com/api/health | python3 -m json.tool
+curl -sS https://sample-deploy-api.onrender.com/api/v1/profile | python3 -m json.tool
+```
 
 ---
 
 ## Phase 2 — Add ProxyHawk Guard
 
-**Public guide (any laptop):** https://proxyhawk.io/docs/guard-ci-existing-pipeline.html
+**Full guide:** https://proxyhawk.io/docs/guard-ci-existing-pipeline.html  
+**Workflow files:** https://proxyhawk.io/guard-ci/
 
-Summary:
+### 1–4. Mac app prerequisites (before CI changes)
 
-1. **Before bootstrap:** install ProxyHawk GitHub App + save deploy checkpoint in Mac app.
-2. Run bootstrap (`guard-onboard-repo.sh` or Mac app **Add Guard to my repo**).
-3. Merge PR → wire Guard job into **existing** `ci.yml`.
-4. Add `PROXYHAWK_API_EMAIL`, `PROXYHAWK_API_PASSWORD` secrets.
-5. Push to `main` → `test → deploy-staging → guard-checkpoint-staging`.
+1. **Guard** tab → record `GET /api/v1/profile`
+2. **Break alerts** → **Set up** → **Session routing** → Environment label = **`staging`** → **Save**  
+   (empty = `dev` → mapping fails)
+3. Install GitHub App: https://github.com/apps/proxyhawk-guard-dev/installations/new
+4. **Deploy checkpoint (CI)** → `prabagaranganesan` / `sample-deploy-api` → confirm Environment **`staging`** → **Save deploy checkpoint**
+
+### 5. Download workflows (any laptop)
+
+```bash
+curl -fsSL https://proxyhawk.io/guard-ci/install.sh | bash
+git add .github/workflows/ && git commit -m "Add Guard CI workflows" && git push
+```
+
+### 6. Add `tools/guard-runner`
+
+Mac app → **Export GitHub CI pack to repo…** → commit `tools/guard-runner/`
+
+### 7. Wire `.github/workflows/ci.yml`
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+  guard-checkpoint-staging:
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/guard-post-backend-deploy.yml
+    with:
+      environment: staging
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
+```
+
+### 8. Secrets
+
+Add: `PROXYHAWK_API_EMAIL`, `PROXYHAWK_API_PASSWORD`
+
+### 9. Verify
+
+Push to `main` — all three jobs green.
 
 ---
 
