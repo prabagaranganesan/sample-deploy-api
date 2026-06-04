@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sample-deploy-api
+    runtime: docker
+    plan: free
+    autoDeploy: false
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_GIT_SHA
+        fromService:
+          type: web
+          name: sample-deploy-api
+          property: commitId

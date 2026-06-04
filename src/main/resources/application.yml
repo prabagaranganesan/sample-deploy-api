@@ -1,0 +1,9 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: sample-deploy-api
+
+app:
+  git-sha: ${APP_GIT_SHA:local-dev}
