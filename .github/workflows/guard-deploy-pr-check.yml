@@ -301,16 +301,25 @@ jobs:
           fi
           if [ -z "$RUNNER_URL" ]; then
             echo "No runner URL provided — requesting short-lived signed URL from backend."
-            signed_url=$(curl -sS \
+            runner_resp="$(mktemp)"
+            http_code=$(curl -sS -o "$runner_resp" -w "%{http_code}" \
               -H "Authorization: Bearer ${PROXYHAWK_API_TOKEN}" \
               -H "ngrok-skip-browser-warning: true" \
-              "${PROXYHAWK_API_BASE_URL%/}/api/v1/guard/runner/download-url?platform=linux-amd64" \
-              | python3 -c "import sys,json; print(json.load(sys.stdin).get('downloadUrl',''))" 2>/dev/null || true)
+              "${PROXYHAWK_API_BASE_URL%/}/api/v1/guard/runner/download-url?platform=linux-amd64")
+            signed_url=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('downloadUrl',''))" "$runner_resp" 2>/dev/null || true)
             if [ -z "$signed_url" ]; then
-              echo "Failed to obtain signed runner URL."
-              echo "Set PROXYHAWK_GUARD_RUNNER_URL secret/variable as fallback."
+              echo "Failed to obtain signed runner URL (HTTP ${http_code})."
+              cat "$runner_resp" || true
+              echo ""
+              echo "Common causes:"
+              echo "  • Render missing PROXYHAWK_GUARD_RUNNER_SIGNING_SECRET"
+              echo "  • Runner binary not in image (redeploy root Dockerfile)"
+              echo "  • Plan missing guard_api_regression entitlement"
+              echo "Fallback: set PROXYHAWK_GUARD_RUNNER_URL secret/variable."
+              rm -f "$runner_resp"
               exit 1
             fi
+            rm -f "$runner_resp"
             RUNNER_URL="$signed_url"
           fi
 
