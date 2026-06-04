@@ -49,7 +49,7 @@ Verify Phase 1: push to `main` → Actions green through `deploy-staging`.
 
 ## Phase 2 — Add ProxyHawk Guard
 
-See `docs/guard-github-integration/TWO-PHASE-ONBOARDING.md` in the ProxyHawk (`proxy_buddy`) repo.
+**Public guide (any laptop):** https://proxyhawk.io/docs/guard-ci-existing-pipeline.html
 
 Summary:
 
