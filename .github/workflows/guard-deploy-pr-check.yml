@@ -303,8 +303,8 @@ jobs:
           fi
           if [ -z "$RUNNER_REPO" ]; then
             echo "Missing tools/guard-runner in this repository."
-            echo "Customer repos should commit tools/guard-runner/ (copy from ProxyHawk docs) — not clone the ProxyHawk app repo."
-            echo "Or set workflow input guard_runner_repository to a repo your CI token can read."
+            echo "Run: curl -fsSL https://proxyhawk.io/guard-ci/install.sh | bash"
+            echo "Then commit tools/guard-runner/ — or set workflow input guard_runner_repository."
             exit 1
           fi
           echo "Fetching tools/guard-runner from ${RUNNER_REPO}@${RUNNER_REF}"
