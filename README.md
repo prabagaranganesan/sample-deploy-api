@@ -53,11 +53,11 @@ curl -sS https://sample-deploy-api.onrender.com/api/v1/profile | python3 -m json
 
 ### 4. Install Guard CI files (any laptop)
 
-One command installs **workflows + guard-runner**:
+One command installs Guard CI **workflow files**:
 
 ```bash
 curl -fsSL https://proxyhawk.io/guard-ci/install.sh | bash
-git add .github/workflows/ tools/guard-runner/
+git add .github/workflows/
 git commit -m "Add ProxyHawk Guard CI" && git push
 ```
 
@@ -84,9 +84,28 @@ jobs:
     secrets: inherit
 ```
 
+Put that Guard job under top-level `jobs:` right after your deploy job:
+
+```yaml
+jobs:
+  deploy-staging:
+    # ... your deploy steps ...
+
+  guard-staging:
+    needs: deploy-staging
+    uses: ./.github/workflows/guard-post-backend-deploy.yml
+    with:
+      environment: staging
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
+```
+
 ### 6. Secrets
 
 Add: `PROXYHAWK_API_EMAIL`, `PROXYHAWK_API_PASSWORD`
+
+Optional override only: `PROXYHAWK_GUARD_RUNNER_URL` (private prebuilt runner binary URL).  
+Optional auth for override URL: `PROXYHAWK_GUARD_RUNNER_TOKEN`.
 
 ### 7. Verify
 

@@ -10,7 +10,9 @@ on:
     branches: [main]
 
 permissions:
+  id-token: write
   contents: read
+  pull-requests: write
 
 jobs:
   test:
@@ -38,3 +40,12 @@ jobs:
       DEPLOY_HOOK: ${{ secrets.STAGING_DEPLOY_HOOK }}
       DEPLOY_API_KEY: ${{ secrets.STAGING_DEPLOY_API_KEY }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+      
+  guard-staging:                    # any job id
+    needs: deploy-staging           # must match deploy job id above
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/guard-post-backend-deploy.yml
+    with:
+      environment: staging
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
