@@ -292,6 +292,7 @@ jobs:
         env:
           RUNNER_URL: ${{ steps.ctx.outputs.guard_runner_url || secrets.PROXYHAWK_GUARD_RUNNER_URL || vars.PROXYHAWK_GUARD_RUNNER_URL }}
           RUNNER_TOKEN: ${{ secrets.PROXYHAWK_GUARD_RUNNER_TOKEN }}
+          PROXYHAWK_API_BASE_URL: ${{ vars.PROXYHAWK_API_BASE_URL || secrets.PROXYHAWK_API_BASE_URL || 'https://api.proxyhawk.io' }}
         run: |
           if [ -x "$GITHUB_WORKSPACE/tools/guard-runner/proxyhawk-guard" ]; then
             echo "Using vendored guard-runner binary."
@@ -299,10 +300,18 @@ jobs:
             exit 0
           fi
           if [ -z "$RUNNER_URL" ]; then
-            echo "Missing guard-runner binary."
-            echo "Set PROXYHAWK_GUARD_RUNNER_URL secret/variable to a private binary URL."
-            echo "Optionally set PROXYHAWK_GUARD_RUNNER_TOKEN for authenticated downloads."
-            exit 1
+            echo "No runner URL provided — requesting short-lived signed URL from backend."
+            signed_url=$(curl -sS \
+              -H "Authorization: Bearer ${PROXYHAWK_API_TOKEN}" \
+              -H "ngrok-skip-browser-warning: true" \
+              "${PROXYHAWK_API_BASE_URL%/}/api/v1/guard/runner/download-url?platform=linux-amd64" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('downloadUrl',''))" 2>/dev/null || true)
+            if [ -z "$signed_url" ]; then
+              echo "Failed to obtain signed runner URL."
+              echo "Set PROXYHAWK_GUARD_RUNNER_URL secret/variable as fallback."
+              exit 1
+            fi
+            RUNNER_URL="$signed_url"
           fi
 
           tmp_payload="$(mktemp)"
