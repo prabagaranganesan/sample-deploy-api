@@ -68,14 +68,30 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           HEALTH_PATH: ${{ inputs.health_path }}
         run: |
+          API_URL="${API_URL%/}"
+          if [ -z "$API_URL" ]; then
+            echo "::error::STAGING_API_URL is empty."
+            echo "Set it as a GitHub Actions Variable (not Secret):"
+            echo "  Repo → Settings → Secrets and variables → Actions → Variables"
+            echo "  Name: STAGING_API_URL"
+            echo "  Value: https://your-api.onrender.com"
+            exit 1
+          fi
+          echo "Polling ${API_URL}${HEALTH_PATH} for gitSha=${EXPECTED_SHA}"
           for i in $(seq 1 90); do
-            body="$(curl -fsSL "${API_URL}${HEALTH_PATH}" || true)"
+            body="$(curl -fsSL "${API_URL}${HEALTH_PATH}" 2>/dev/null || true)"
+            if [ -z "$body" ]; then
+              echo "Attempt ${i}/90: health check unreachable, retrying..."
+              sleep 5
+              continue
+            fi
             sha="$(echo "$body" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("gitSha",""))' 2>/dev/null || true)"
             if [ "$sha" = "$EXPECTED_SHA" ]; then
               echo "Live commit verified: $sha"
               exit 0
             fi
+            echo "Attempt ${i}/90: live gitSha=${sha:-unknown}, waiting..."
             sleep 5
           done
-          echo "Timed out waiting for live gitSha=${EXPECTED_SHA}"
+          echo "Timed out waiting for live gitSha=${EXPECTED_SHA} at ${API_URL}${HEALTH_PATH}"
           exit 1

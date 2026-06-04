@@ -31,6 +31,7 @@ jobs:
     with:
       platform: ${{ vars.STAGING_DEPLOY_PLATFORM || 'render' }}
       expected_sha: ${{ github.sha }}
+      # Must be a GitHub Actions *Variable* (Settings → Variables), not a Secret
       api_url: ${{ vars.STAGING_API_URL }}
       environment_label: staging
     secrets:
