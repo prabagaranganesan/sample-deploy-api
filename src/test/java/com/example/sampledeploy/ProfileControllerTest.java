@@ -28,6 +28,7 @@ class ProfileControllerTest {
     void healthReturnsGitSha() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.gitSha").exists());
+                .andExpect(jsonPath("$.gitSha").exists())
+                .andExpect(jsonPath("$.version").value("0.1.1"));
     }
 }

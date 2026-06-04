@@ -7,3 +7,4 @@ spring:
 
 app:
   git-sha: ${APP_GIT_SHA:local-dev}
+  version: ${APP_VERSION:0.1.1}
