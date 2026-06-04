@@ -42,7 +42,7 @@ curl -sS https://sample-deploy-api.onrender.com/api/v1/profile | python3 -m json
 ## Phase 2 — Add ProxyHawk Guard
 
 **Full guide:** https://proxyhawk.io/docs/guard-ci-existing-pipeline.html  
-**Workflow files:** https://proxyhawk.io/guard-ci/
+**CI install:** https://proxyhawk.io/guard-ci/
 
 ### 1–4. Mac app prerequisites (before CI changes)
 
@@ -52,18 +52,17 @@ curl -sS https://sample-deploy-api.onrender.com/api/v1/profile | python3 -m json
 3. Install GitHub App: https://github.com/apps/proxyhawk-guard-dev/installations/new
 4. **Deploy checkpoint (CI)** → `prabagaranganesan` / `sample-deploy-api` → confirm Environment **`staging`** → **Save deploy checkpoint**
 
-### 5. Download workflows (any laptop)
+### 5. Install Guard CI files (any laptop)
+
+One command installs **workflows + guard-runner**:
 
 ```bash
 curl -fsSL https://proxyhawk.io/guard-ci/install.sh | bash
-git add .github/workflows/ && git commit -m "Add Guard CI workflows" && git push
+git add .github/workflows/ tools/guard-runner/
+git commit -m "Add ProxyHawk Guard CI" && git push
 ```
 
-### 6. Add `tools/guard-runner`
-
-Mac app → **Export GitHub CI pack to repo…** → commit `tools/guard-runner/`
-
-### 7. Wire `.github/workflows/ci.yml`
+### 6. Wire `.github/workflows/ci.yml`
 
 ```yaml
 permissions:
@@ -81,11 +80,11 @@ permissions:
     secrets: inherit
 ```
 
-### 8. Secrets
+### 7. Secrets
 
 Add: `PROXYHAWK_API_EMAIL`, `PROXYHAWK_API_PASSWORD`
 
-### 9. Verify
+### 8. Verify
 
 Push to `main` — all three jobs green.
 
