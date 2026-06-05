@@ -25,6 +25,7 @@ public class ProfileController {
                 "Demo User",
                 "free",
                 Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-06-05T12:00:00Z"),
                 preferences
         );
     }

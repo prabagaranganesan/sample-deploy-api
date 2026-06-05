@@ -9,5 +9,6 @@ public record ProfileResponse(
         String displayName,
         String plan,
         Instant createdAt,
+        Instant lastLoginAt,
         Map<String, Object> preferences
 ) {}

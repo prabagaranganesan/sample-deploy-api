@@ -21,7 +21,8 @@ class ProfileControllerTest {
     void profileReturnsDemoUser() throws Exception {
         mockMvc.perform(get("/api/v1/profile"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("demo@example.com"));
+                .andExpect(jsonPath("$.email").value("demo@example.com"))
+                .andExpect(jsonPath("$.lastLoginAt").value("2026-06-05T12:00:00Z"));
     }
 
     @Test
